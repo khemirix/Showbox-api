@@ -2,7 +2,6 @@ import CryptoJS from 'crypto-js';
 import { customAlphabet } from 'nanoid';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
-import readline from 'readline';
 
 dotenv.config();
 
@@ -109,47 +108,65 @@ class ShowboxAPI {
         const bypassUrl = `${bypassBaseUrl}/html?url=${encodeURIComponent(targetUrl)}`;
 
         console.log(`\n🔄 Bypassing Cloudflare for: ${targetUrl}`);
+        console.log(`🔗 Bypass URL: ${bypassUrl}`);
 
         try {
-            const response = await fetch(bypassUrl);
+            const response = await fetch(bypassUrl, { timeout: 60000 });
+
             if (!response.ok) {
-                throw new Error(`Bypass server error: ${response.statusText}`);
-            }
-
-            let rawText = await response.text();
-
-            try {
-                // Check if the response is wrapped in HTML (Firefox plaintext view)
-                if (rawText.trim().startsWith('<html') || rawText.trim().startsWith('<!DOCTYPE html>')) {
-                    console.log("Received HTML wrapped response, attempting to extract JSON...");
-                    // Try to find JSON inside <pre> tags or just the body text
-                    const preMatch = rawText.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
-                    if (preMatch && preMatch[1]) {
-                        rawText = preMatch[1];
-                    } else {
-                        // Fallback: try to strip tags
-                        rawText = rawText.replace(/<[^>]*>/g, '');
-                    }
-                    // Decode HTML entities if needed (e.g. &quot; -> ")
-                    // For now, let's assume it's simple JSON
-                }
-
-                const data = JSON.parse(rawText);
-                if (data && data.data && data.data.link) {
-                    const link = data.data.link;
-                    console.log(`✅ Successfully retrieved link: ${link}`);
-                    return link.split('/').pop();
-                } else {
-                    console.error("Invalid data structure received:", data);
-                    return null;
-                }
-            } catch (e) {
-                console.error("Failed to parse response from bypass server. Response might not be JSON:", rawText.substring(0, 200) + "...");
+                console.error(`Bypass server returned error: ${response.status} ${response.statusText}`);
                 return null;
             }
 
+            const rawText = await response.text();
+            console.log(`📄 Raw response (first 500 chars): ${rawText.substring(0, 500)}`);
+
+            // Strategy 1: try to parse as JSON directly
+            try {
+                const data = JSON.parse(rawText);
+                if (data && data.data && data.data.link) {
+                    const link = data.data.link;
+                    console.log(`✅ Got link from JSON: ${link}`);
+                    return link.split('/').pop();
+                }
+            } catch (e) {
+                console.log('Response is not JSON, trying HTML extraction...');
+            }
+
+            // Strategy 2: extract from HTML - look for febbox.com share link
+            const febboxPatterns = [
+                /febbox\.com\/share\/([a-zA-Z0-9_-]+)/,
+                /href=["']https?:\/\/[^"']*febbox\.com\/share\/([a-zA-Z0-9_-]+)/,
+                /"link"\s*:\s*"([^"]*febbox\.com[^"]*)"/,
+                /window\.location\s*=\s*["']([^"']*febbox[^"']*)["']/,
+                /share_key['":\s]+['"]([a-zA-Z0-9_-]+)['"]/,
+            ];
+
+            for (const pattern of febboxPatterns) {
+                const match = rawText.match(pattern);
+                if (match) {
+                    console.log(`✅ Got link from HTML pattern: ${match[0]}`);
+                    // Return share key or full URL last segment
+                    return match[1].split('/').pop();
+                }
+            }
+
+            // Strategy 3: look for any redirect or meta refresh URL
+            const metaRefresh = rawText.match(/content=["'][0-9]+;\s*url=([^"']+)["']/i);
+            if (metaRefresh) {
+                const redirectUrl = metaRefresh[1];
+                console.log(`✅ Got redirect URL: ${redirectUrl}`);
+                if (redirectUrl.includes('febbox')) {
+                    return redirectUrl.split('/').pop();
+                }
+            }
+
+            console.error('Could not extract Febbox ID from response');
+            console.error('Full response:', rawText.substring(0, 1000));
+            return null;
+
         } catch (error) {
-            console.error("Error during automated bypass:", error);
+            console.error('Error during bypass request:', error.message);
             return null;
         }
     }
