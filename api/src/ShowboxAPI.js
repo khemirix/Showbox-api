@@ -103,72 +103,68 @@ class ShowboxAPI {
     }
 
     async getFebBoxId(id, type) {
-        const targetUrl = `https://www.showbox.media/index/share_link?id=${id}&type=${type}`;
-        const bypassBaseUrl = process.env.BYPASS_URL || 'http://localhost:8000';
-        const bypassUrl = `${bypassBaseUrl}/html?url=${encodeURIComponent(targetUrl)}`;
-
-        console.log(`\n🔄 Bypassing Cloudflare for: ${targetUrl}`);
-        console.log(`🔗 Bypass URL: ${bypassUrl}`);
-
+        // Try direct API call first (no browser/bypass needed)
         try {
-            const response = await fetch(bypassUrl, { timeout: 60000 });
-
-            if (!response.ok) {
-                console.error(`Bypass server returned error: ${response.status} ${response.statusText}`);
-                return null;
+            console.log(`\n🔄 Getting FebBox ID via API for id=${id} type=${type}`);
+            const data = await this.request('Film_sharelink', { mid: id, type });
+            console.log('Film_sharelink response:', JSON.stringify(data).substring(0, 300));
+            if (data && data.data && data.data.link) {
+                const link = data.data.link;
+                console.log(`✅ Got link from API: ${link}`);
+                return link.split('/').pop();
             }
+        } catch (e) {
+            console.log('Film_sharelink failed, trying fallback:', e.message);
+        }
 
-            const rawText = await response.text();
-            console.log(`📄 Raw response (first 500 chars): ${rawText.substring(0, 500)}`);
+        // Fallback: try ShareLink module
+        try {
+            const data = await this.request('ShareLink', { mid: id, type });
+            console.log('ShareLink response:', JSON.stringify(data).substring(0, 300));
+            if (data && data.data && data.data.link) {
+                const link = data.data.link;
+                console.log(`✅ Got link from ShareLink: ${link}`);
+                return link.split('/').pop();
+            }
+        } catch (e) {
+            console.log('ShareLink failed:', e.message);
+        }
 
-            // Strategy 1: try to parse as JSON directly
+        // Fallback: try fetching showbox share URL directly (no Cloudflare on API endpoint)
+        try {
+            const shareUrl = `https://www.showbox.media/index/share_link?id=${id}&type=${type}`;
+            console.log(`Trying direct fetch: ${shareUrl}`);
+            const response = await fetch(shareUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Referer': 'https://www.showbox.media/',
+                }
+            });
+            const text = await response.text();
+            console.log('Direct fetch response:', text.substring(0, 300));
+
             try {
-                const data = JSON.parse(rawText);
+                const data = JSON.parse(text);
                 if (data && data.data && data.data.link) {
                     const link = data.data.link;
-                    console.log(`✅ Got link from JSON: ${link}`);
+                    console.log(`✅ Got link from direct fetch: ${link}`);
                     return link.split('/').pop();
                 }
             } catch (e) {
-                console.log('Response is not JSON, trying HTML extraction...');
-            }
-
-            // Strategy 2: extract from HTML - look for febbox.com share link
-            const febboxPatterns = [
-                /febbox\.com\/share\/([a-zA-Z0-9_-]+)/,
-                /href=["']https?:\/\/[^"']*febbox\.com\/share\/([a-zA-Z0-9_-]+)/,
-                /"link"\s*:\s*"([^"]*febbox\.com[^"]*)"/,
-                /window\.location\s*=\s*["']([^"']*febbox[^"']*)["']/,
-                /share_key['":\s]+['"]([a-zA-Z0-9_-]+)['"]/,
-            ];
-
-            for (const pattern of febboxPatterns) {
-                const match = rawText.match(pattern);
+                // Try regex on raw text
+                const match = text.match(/febbox\.com\/share\/([a-zA-Z0-9_-]+)/);
                 if (match) {
-                    console.log(`✅ Got link from HTML pattern: ${match[0]}`);
-                    // Return share key or full URL last segment
-                    return match[1].split('/').pop();
+                    console.log(`✅ Got share key from regex: ${match[1]}`);
+                    return match[1];
                 }
             }
-
-            // Strategy 3: look for any redirect or meta refresh URL
-            const metaRefresh = rawText.match(/content=["'][0-9]+;\s*url=([^"']+)["']/i);
-            if (metaRefresh) {
-                const redirectUrl = metaRefresh[1];
-                console.log(`✅ Got redirect URL: ${redirectUrl}`);
-                if (redirectUrl.includes('febbox')) {
-                    return redirectUrl.split('/').pop();
-                }
-            }
-
-            console.error('Could not extract Febbox ID from response');
-            console.error('Full response:', rawText.substring(0, 1000));
-            return null;
-
-        } catch (error) {
-            console.error('Error during bypass request:', error.message);
-            return null;
+        } catch (e) {
+            console.log('Direct fetch failed:', e.message);
         }
+
+        console.error('All methods failed to get FebBox ID');
+        return null;
     }
 
     async getAutocomplete(keyword, pagelimit = 5) {
