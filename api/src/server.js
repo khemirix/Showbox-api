@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import ShowboxAPI from './ShowboxAPI.js';
-import FebboxAPI from './FebBoxApi.js';
+import FebboxAPI, { FEBBOX_AUTH_CONFIGURED } from './FebBoxApi.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         ok: true,
-        febboxAuthConfigured: Boolean(process.env.FEBBOX_UI_COOKIE)
+        febboxAuthConfigured: FEBBOX_AUTH_CONFIGURED
     });
 });
 
@@ -116,7 +116,7 @@ app.get('/api/febbox/links', async (req, res) => {
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-    if (!process.env.FEBBOX_UI_COOKIE) {
-        console.warn('WARNING: FEBBOX_UI_COOKIE is not set — /api/febbox/links will return no results.');
+    if (!FEBBOX_AUTH_CONFIGURED) {
+        console.warn('WARNING: no Febbox session configured — /api/febbox/links will return no results.');
     }
 });

@@ -57,12 +57,11 @@ An advanced Node.js API that bridges **Showbox** (for media discovery) and **Feb
     ```
     *Edit `api/.env` to add your optional configuration.*
 
-    `FEBBOX_UI_COOKIE` is **required** for `/api/febbox/links`. Febbox only returns
-    stream qualities to logged-in users; without a valid `ui` cookie the endpoint
-    returns `[]` (older deployments did so silently). Log in at
-    `https://www.febbox.com`, copy the `ui` cookie value from your browser's
-    developer tools, and set it as `FEBBOX_UI_COOKIE`. Check
-    `GET /api/health` to confirm `febboxAuthConfigured: true`.
+    For this personal project the Febbox `ui` session is bundled directly in
+    `api/src/FebBoxApi.js`, so no cookie configuration is needed. Febbox only
+    returns stream qualities to logged-in users; if that bundled session ever
+    expires, update the constant in `FebBoxApi.js`. Check `GET /api/health` to
+    confirm `febboxAuthConfigured: true`.
 
 ---
 

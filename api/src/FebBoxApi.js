@@ -4,7 +4,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const FEBBOX_UI_COOKIE = process.env.FEBBOX_UI_COOKIE;
+// Personal project: the Febbox session is bundled so no configuration is needed.
+// WARNING: this is a real session token committed to a public repository.
+const FEBBOX_UI_COOKIE = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3OTUzMDAxNDIsIm5iZiI6MTc5NTMwMDE0MiwiZXhwIjoxODI2NDA0MTYyLCJkYXRhIjp7InVpZCI6NDY4ODQwLCJ0b2tlbiI6Ijk2ZjVkZGJhM2Y2NDM5NzVjODkwODBmNTVlZjY1MjI0In19.hYlteRsTANWskfdzBmNiKBRzXbyojzB058bYHaebGaQ';
+
+export const FEBBOX_AUTH_CONFIGURED = Boolean(FEBBOX_UI_COOKIE);
 
 class FebboxAPI {
     constructor() {
