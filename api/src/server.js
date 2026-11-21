@@ -15,7 +15,7 @@ app.use(cors());
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Cookie');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -96,9 +96,8 @@ app.get('/api/febbox/id', async (req, res) => {
 
 app.get('/api/febbox/files', async (req, res) => {
     const { shareKey, parent_id = 0 } = req.query;
-    const cookie = req.headers['x-auth-cookie'] || null;
     try {
-        const files = await febboxAPI.getFileList(shareKey, parent_id, cookie);
+        const files = await febboxAPI.getFileList(shareKey, parent_id);
         res.json(files);
     } catch (error) {
         sendError(res, error);
@@ -107,9 +106,8 @@ app.get('/api/febbox/files', async (req, res) => {
 
 app.get('/api/febbox/links', async (req, res) => {
     const { shareKey, fid } = req.query;
-    const cookie = req.headers['x-auth-cookie'] || null;
     try {
-        const links = await febboxAPI.getLinks(shareKey, fid, cookie);
+        const links = await febboxAPI.getLinks(shareKey, fid);
         res.json(links);
     } catch (error) {
         sendError(res, error);
