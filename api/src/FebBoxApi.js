@@ -19,7 +19,7 @@ class FebboxAPI {
             return this;
         }
 
-        this.headers.cookie = `ui=${cookie}`;
+        this.headers.cookie = String(cookie).startsWith('ui=') ? String(cookie) : `ui=${cookie}`;
         return this;
     }
 
@@ -40,12 +40,29 @@ class FebboxAPI {
     async _fetchJson(url, cookie = null) {
         const headers = {
             ...this.headers,
-            ...(cookie ? { cookie: `ui=${cookie}` } : {})
+            ...(cookie ? { cookie: String(cookie).startsWith('ui=') ? String(cookie) : `ui=${cookie}` } : {})
         };
 
         const response = await fetch(url, { headers });
         if (!response.ok) throw new Error(`Error fetching data from ${url}: ${response.statusText}`);
-        return response.json();
+
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            data = null;
+        }
+
+        // Febbox replies with a JSON "Please login" payload instead of an HTTP 401.
+        if (data && (data.login_required || data.code === -1)) {
+            const error = new Error(
+                `Febbox login required or session expired${data.msg ? `: ${data.msg}` : ''}. Set a valid FEBBOX_UI_COOKIE.`
+            );
+            error.status = 401;
+            throw error;
+        }
+        return data === null ? text : data;
     }
 
     // Get the list of files from a shared folder
@@ -54,6 +71,11 @@ class FebboxAPI {
         this._setReferer(shareKey);
 
         const data = await this._fetchJson(url , cookie);
+        if (!data || !data.data || !Array.isArray(data.data.file_list)) {
+            const error = new Error('Febbox returned an invalid file list');
+            error.status = 502;
+            throw error;
+        }
         return data.data.file_list;
     }
 
@@ -63,13 +85,25 @@ class FebboxAPI {
         this._setReferer(shareKey);
 
         const data = await this._fetchJson(url, cookie);
-        const htmlResponse = data.html;
+        if (!data || typeof data !== 'object' || !data.html) {
+            const error = new Error('Febbox returned no quality list HTML for this file');
+            error.status = 502;
+            throw error;
+        }
 
         // Parse HTML response and extract file qualities
-        const dom = new JSDOM(htmlResponse);
+        const dom = new JSDOM(data.html);
         const doc = dom.window.document;
+        const links = this._extractFileQualities(doc).filter((link) => Boolean(link.url));
 
-        return this._extractFileQualities(doc);
+        if (!links.length) {
+            const error = new Error(
+                'No stream links found on Febbox. The FEBBOX_UI_COOKIE may be missing or expired.'
+            );
+            error.status = 502;
+            throw error;
+        }
+        return links;
     }
 
     // Extract file qualities from the parsed DOM

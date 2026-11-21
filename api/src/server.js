@@ -15,7 +15,7 @@ app.use(cors());
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Cookie');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -27,8 +27,21 @@ app.use(express.json());
 const showboxAPI = new ShowboxAPI();
 const febboxAPI = new FebboxAPI();
 
+function sendError(res, error) {
+    const status = error && error.status ? error.status : 500;
+    res.status(status).json({ error: (error && error.message) || 'Unknown error' });
+}
+
 app.get('/', (req, res) => {
     res.send('Showbox and Febbox API is working!');
+});
+
+// Lets clients detect a missing/expired Febbox session without leaking the cookie.
+app.get('/api/health', (req, res) => {
+    res.json({
+        ok: true,
+        febboxAuthConfigured: Boolean(process.env.FEBBOX_UI_COOKIE)
+    });
 });
 
 app.get('/api/autocomplete', async (req, res) => {
@@ -37,7 +50,7 @@ app.get('/api/autocomplete', async (req, res) => {
         const results = await showboxAPI.getAutocomplete(keyword, pagelimit);
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -47,7 +60,7 @@ app.get('/api/search', async (req, res) => {
         const results = await showboxAPI.search(title, type, page, pagelimit);
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -57,7 +70,7 @@ app.get('/api/movie/:id', async (req, res) => {
         const movieDetails = await showboxAPI.getMovieDetails(id);
         res.json(movieDetails);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -67,7 +80,7 @@ app.get('/api/show/:id', async (req, res) => {
         const showDetails = await showboxAPI.getShowDetails(id);
         res.json(showDetails);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -77,7 +90,7 @@ app.get('/api/febbox/id', async (req, res) => {
         const febBoxId = await showboxAPI.getFebBoxId(id, type);
         res.json({ febBoxId });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -88,7 +101,7 @@ app.get('/api/febbox/files', async (req, res) => {
         const files = await febboxAPI.getFileList(shareKey, parent_id, cookie);
         res.json(files);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
@@ -99,10 +112,13 @@ app.get('/api/febbox/links', async (req, res) => {
         const links = await febboxAPI.getLinks(shareKey, fid, cookie);
         res.json(links);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendError(res, error);
     }
 });
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
+    if (!process.env.FEBBOX_UI_COOKIE) {
+        console.warn('WARNING: FEBBOX_UI_COOKIE is not set — /api/febbox/links will return no results.');
+    }
 });
