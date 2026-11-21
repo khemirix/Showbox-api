@@ -103,16 +103,22 @@ class ShowboxAPI {
     }
 
     async getFebBoxId(id, type) {
+        // Some Showbox modules reply with a string in `data`; `data.data.link`
+        // then resolves to String.prototype.link (a function), not a URL.
+        const shareKeyFrom = (data, source) => {
+            const link = data && data.data && data.data.link;
+            if (typeof link !== 'string' || !link) return null;
+            console.log(`✅ Got link from ${source}: ${link}`);
+            return link.split('/').pop();
+        };
+
         // Try direct API call first (no browser/bypass needed)
         try {
             console.log(`\n🔄 Getting FebBox ID via API for id=${id} type=${type}`);
             const data = await this.request('Film_sharelink', { mid: id, type });
             console.log('Film_sharelink response:', JSON.stringify(data).substring(0, 300));
-            if (data && data.data && data.data.link) {
-                const link = data.data.link;
-                console.log(`✅ Got link from API: ${link}`);
-                return link.split('/').pop();
-            }
+            const key = shareKeyFrom(data, 'API');
+            if (key) return key;
         } catch (e) {
             console.log('Film_sharelink failed, trying fallback:', e.message);
         }
@@ -121,11 +127,8 @@ class ShowboxAPI {
         try {
             const data = await this.request('ShareLink', { mid: id, type });
             console.log('ShareLink response:', JSON.stringify(data).substring(0, 300));
-            if (data && data.data && data.data.link) {
-                const link = data.data.link;
-                console.log(`✅ Got link from ShareLink: ${link}`);
-                return link.split('/').pop();
-            }
+            const key = shareKeyFrom(data, 'ShareLink');
+            if (key) return key;
         } catch (e) {
             console.log('ShareLink failed:', e.message);
         }
@@ -144,20 +147,19 @@ class ShowboxAPI {
             const text = await response.text();
             console.log('Direct fetch response:', text.substring(0, 300));
 
+            let data = null;
             try {
-                const data = JSON.parse(text);
-                if (data && data.data && data.data.link) {
-                    const link = data.data.link;
-                    console.log(`✅ Got link from direct fetch: ${link}`);
-                    return link.split('/').pop();
-                }
+                data = JSON.parse(text);
             } catch (e) {
-                // Try regex on raw text
-                const match = text.match(/febbox\.com\/share\/([a-zA-Z0-9_-]+)/);
-                if (match) {
-                    console.log(`✅ Got share key from regex: ${match[1]}`);
-                    return match[1];
-                }
+                // Fall through to regex on raw text
+            }
+            const key = shareKeyFrom(data, 'direct fetch');
+            if (key) return key;
+
+            const match = text.match(/febbox\.com\/share\/([a-zA-Z0-9_-]+)/);
+            if (match) {
+                console.log(`✅ Got share key from regex: ${match[1]}`);
+                return match[1];
             }
         } catch (e) {
             console.log('Direct fetch failed:', e.message);
