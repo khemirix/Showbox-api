@@ -123,6 +123,15 @@ The API will be available at: `http://localhost:3000`
 `GET /api/febbox/links/:shareKey/:fid`
 *   Generates direct download links for a specific file.
 
+### 4. Arabic Subtitles & Health
+`GET /api/subtitles/search`
+*   `imdb`: IMDb id (e.g. `tt1375666`), `type`: `movie` or `tv`.
+*   For series, also send `season` and `episode` to get the exact episode subtitle.
+*   Returns a CORS-safe WebVTT URL from `GET /api/subtitles/file`.
+
+`GET /api/health`
+*   Reports whether the Febbox session is configured.
+
 ---
 
 ## 🤝 Credits & Acknowledgments

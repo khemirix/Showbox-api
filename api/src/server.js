@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import ShowboxAPI from './ShowboxAPI.js';
 import FebboxAPI, { FEBBOX_AUTH_CONFIGURED } from './FebBoxApi.js';
+import { findArabicSubtitle, fetchSubtitleFile } from './SubtitlesAPI.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -42,6 +43,28 @@ app.get('/api/health', (req, res) => {
         ok: true,
         febboxAuthConfigured: FEBBOX_AUTH_CONFIGURED
     });
+});
+
+// Arabic subtitles: search by IMDb id and serve a CORS-safe WebVTT file.
+app.get('/api/subtitles/search', async (req, res) => {
+    const { imdb, type, season, episode } = req.query;
+    try {
+        const subtitle = await findArabicSubtitle({ imdbId: imdb, type, season, episode });
+        res.json({ subtitle: subtitle });
+    } catch (error) {
+        sendError(res, error);
+    }
+});
+
+app.get('/api/subtitles/file', async (req, res) => {
+    try {
+        const vtt = await fetchSubtitleFile(req.query.url);
+        res.set('Content-Type', 'text/vtt; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=86400');
+        res.send(vtt);
+    } catch (error) {
+        sendError(res, error);
+    }
 });
 
 app.get('/api/autocomplete', async (req, res) => {
