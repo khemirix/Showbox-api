@@ -20,6 +20,7 @@ function asSubtitle(id, name, format, directUrl) {
         id: id,
         name: name || 'Arabic',
         lang: 'ar',
+        languages: [{ code: 'ar', label: 'العربية' }],
         format: (format || 'srt').toLowerCase(),
         // Relative on purpose: the browser prepends the Showbox API origin.
         url: '/api/subtitles/file?url=' + encodeURIComponent(directUrl)
@@ -98,20 +99,34 @@ async function findSubtitlesWebsite({ imdbId, isSeries, season, episode }) {
         pick.format || 'srt', directUrl);
 }
 
-export async function findArabicSubtitle({ imdbId, type, season, episode }) {
+// Provider names are stable for the player UI. "auto" keeps the original
+// MySubs-first behavior; the other two force one already-integrated provider.
+export async function findSubtitle({ imdbId, type, season, episode, provider }) {
     if (!/^tt\d+$/.test(imdbId || '')) return null;
 
     const isSeries = type === 'series' || type === 'tv';
-    const key = [imdbId, isSeries ? 'series' : 'movie', season || '', episode || ''].join('|');
+    const choice = String(provider || 'auto').toLowerCase();
+    const key = [imdbId, isSeries ? 'series' : 'movie', season || '', episode || '', choice].join('|');
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_TTL) return hit.value;
 
     const args = { imdbId: imdbId, isSeries: isSeries, season: season, episode: episode };
-    let value = await findMySubs(args);
-    if (!value) value = await findSubtitlesWebsite(args);
+    let value = null;
+    if (choice === 'mysubs') {
+        value = await findMySubs(args);
+    } else if (choice === 'subtitles-website') {
+        value = await findSubtitlesWebsite(args);
+    } else {
+        value = await findMySubs(args);
+        if (!value) value = await findSubtitlesWebsite(args);
+    }
 
     if (value) cache.set(key, { at: Date.now(), value: value });
     return value;
+}
+
+export async function findArabicSubtitle(args) {
+    return findSubtitle(args || {});
 }
 
 function srtToVtt(text) {
