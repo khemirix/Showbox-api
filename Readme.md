@@ -123,14 +123,26 @@ The API will be available at: `http://localhost:3000`
 `GET /api/febbox/links/:shareKey/:fid`
 *   Generates direct download links for a specific file.
 
-### 4. Arabic Subtitles & Health
+### 4. Subtitles & Health
 `GET /api/subtitles/search`
 *   `imdb`: IMDb id (e.g. `tt1375666`), `type`: `movie` or `tv`.
 *   For series, also send `season` and `episode` to get the exact episode subtitle.
-*   Returns a CORS-safe WebVTT URL from `GET /api/subtitles/file`.
+*   `provider`: `auto` (default), `mysubs`, `subtitles-website`, `subdl`, `wyzie`, or `opensubtitles`.
+*   `auto` searches all providers concurrently, filters to Arabic/French/English/Polish, removes
+    duplicates, ranks by IMDb/episode/release/quality metadata, and returns `{ subtitle, results,
+    languages, providers, errors }`. A single provider returns the same shape for that provider.
+*   Returns CORS-safe WebVTT URLs from `GET /api/subtitles/file`. New providers use an opaque
+    `id` token so API keys and signed download URLs stay server-side.
+
+`GET /api/subtitles/file`
+*   `url`: direct legacy MySubs / subtitles.website URL, or `id`: opaque token from a new-provider result.
 
 `GET /api/health`
-*   Reports whether the Febbox session is configured.
+*   Reports whether the Febbox session and each subtitle provider credential are configured.
+
+Required server-side environment variables for the new providers: `SUBDL_API_KEY`,
+`WYZIE_SUBS_API_KEY`, `OPENSUBTITLES_API_KEY`. `OPENSUBTITLES_USERNAME` and
+`OPENSUBTITLES_PASSWORD` are optional and only raise the download allowance.
 
 ---
 

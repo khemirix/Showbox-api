@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import ShowboxAPI from './ShowboxAPI.js';
 import FebboxAPI, { FEBBOX_AUTH_CONFIGURED } from './FebBoxApi.js';
-import { findSubtitle, fetchSubtitleFile } from './SubtitlesAPI.js';
+import { findSubtitles, fetchSubtitleFile, fetchStoredSubtitleFile } from './SubtitlesAPI.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -41,16 +41,25 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         ok: true,
-        febboxAuthConfigured: FEBBOX_AUTH_CONFIGURED
+        febboxAuthConfigured: FEBBOX_AUTH_CONFIGURED,
+        subtitleProviders: {
+            mysubs: true,
+            'subtitles-website': true,
+            subdl: !!process.env.SUBDL_API_KEY,
+            wyzie: !!process.env.WYZIE_SUBS_API_KEY,
+            opensubtitles: !!process.env.OPENSUBTITLES_API_KEY
+        }
     });
 });
 
-// Arabic subtitles: search by IMDb id and serve a CORS-safe WebVTT file.
+// Subtitles: search by IMDb id and serve a CORS-safe WebVTT file.
+// "auto" searches all configured providers concurrently and returns the
+// combined, deduplicated, ranked result list used by the player's two-step UI.
 app.get('/api/subtitles/search', async (req, res) => {
-    const { imdb, type, season, episode, provider } = req.query;
+    const { imdb, type, title, season, episode, provider } = req.query;
     try {
-        const subtitle = await findSubtitle({ imdbId: imdb, type, season, episode, provider });
-        res.json({ subtitle: subtitle });
+        const data = await findSubtitles({ imdbId: imdb, type, title, season, episode, provider });
+        res.json(data);
     } catch (error) {
         sendError(res, error);
     }
@@ -58,7 +67,11 @@ app.get('/api/subtitles/search', async (req, res) => {
 
 app.get('/api/subtitles/file', async (req, res) => {
     try {
-        const vtt = await fetchSubtitleFile(req.query.url);
+        // New providers use an opaque server-side token so credentials and
+        // signed download URLs never reach the browser.
+        const vtt = req.query.id
+            ? await fetchStoredSubtitleFile(req.query.id)
+            : await fetchSubtitleFile(req.query.url);
         res.set('Content-Type', 'text/vtt; charset=utf-8');
         res.set('Cache-Control', 'public, max-age=86400');
         res.send(vtt);
